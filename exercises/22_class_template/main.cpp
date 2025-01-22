@@ -10,6 +10,7 @@ struct Tensor4D {
     Tensor4D(unsigned int const shape_[4], T const *data_) {
         unsigned int size = 1;
         // TODO: 填入正确的 shape 并计算 size
+        for (int i = 0; i < 4; i++) {shape[i] = shape_[i]; size *= shape_[i];}
         data = new T[size];
         std::memcpy(data, data_, size * sizeof(T));
     }
@@ -28,6 +29,56 @@ struct Tensor4D {
     // 则 `this` 与 `others` 相加时，3 个形状为 `[1, 2, 1, 4]` 的子张量各自与 `others` 对应项相加。
     Tensor4D &operator+=(Tensor4D const &others) {
         // TODO: 实现单向广播的加法
+        bool others_need_broadcast = false;
+        for (int i = 0; i < 4; i++)
+        {
+            if (shape[i] != others.shape[i])
+            {
+                if (others.shape[i] != 1)
+                    throw std::invalid_argument("Shapes are not unibroadcastable");
+                others_need_broadcast = true;
+            }
+        }
+
+        unsigned int size = shape[0] * shape[1] * shape[2] * shape[3];
+
+        T *others_data;
+        if (others_need_broadcast) {
+            others_data = new T[size];
+            unsigned int strides[4] {};
+            strides[3] = 1;
+            for (int dim = 2; dim >= 0; dim--) {
+                strides[dim] = strides[dim + 1] * others.shape[dim + 1];
+            }
+            for (int i = 0; i < size; i++)
+            {
+                unsigned int originalIndex = 0;
+                unsigned int tempIndex = i;
+                for (int dim = 3; dim >= 0; dim--) {
+                    unsigned int originalDimSize = others.shape[dim];
+                    unsigned int broadcastDimSize = shape[dim];
+
+                    unsigned int coord = tempIndex % broadcastDimSize;
+                    tempIndex /= broadcastDimSize;
+
+                    if (originalDimSize != 1)
+                        originalIndex += coord * strides[dim];
+                }
+                others_data[i] = others.data[originalIndex];
+            }
+        }
+        else {
+            others_data = others.data;
+        }
+
+        // 加法计算
+        for (int i = 0; i < size; i++)
+            this->data[i] += others_data[i];        
+
+        if (others_need_broadcast) {
+            delete[] others_data;
+        }
+
         return *this;
     }
 };
